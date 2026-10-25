@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>It's a Metric, Too</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: board on the left, a slim status column on the right; stacks on phones. */
+:root {
+  --bg: #f3f5f7;
+  --paper: #ffffff;
+  --ink: #16202a;
+  --muted: #5d6b78;
+  --grid: #c9d2db;
+  --wall: #16202a;
+  --accent: #2563c9;
+  --ok: #1d8a4e;
+  --bad: #c8322b;
+  --hover: rgba(37, 99, 201, .55);
+  --path: #e0700f;
+  --sans: "Instrument Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --paper: #1a2129; --ink: #e5ebf1; --muted: #93a1ae; --grid: #33404c;
+    --wall: #eef3f8; --accent: #6aa0ff; --ok: #4fcf86; --bad: #ff6b62; --hover: rgba(106,160,255,.6);
+    --path: #ffa64d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --paper: #1a2129; --ink: #e5ebf1; --muted: #93a1ae; --grid: #33404c;
+  --wall: #eef3f8; --accent: #6aa0ff; --ok: #4fcf86; --bad: #ff6b62; --hover: rgba(106,160,255,.6);
+  --path: #ffa64d;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 32px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+header a { color: var(--accent); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+@media (max-width: 760px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.board { background: var(--paper); border-radius: 10px; padding: 12px; min-width: 0; }
+svg { display: block; width: 100%; max-width: 100%; height: auto; touch-action: none; user-select: none; cursor: crosshair; }
+.side { display: grid; gap: 14px; min-width: 0; }
+.panel { background: var(--paper); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
+.label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.stat { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.stat b { font-family: var(--mono); }
+.good { color: var(--ok); } .badc { color: var(--bad); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit; font-weight: 600; padding: 7px 12px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--grid); background: var(--bg); color: var(--ink);
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.answer { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; }
+.rows { font-family: var(--mono); font-size: .8rem; color: var(--muted); line-height: 1.5; word-break: break-word; }
+.help { color: var(--muted); font-size: .88rem; line-height: 1.5; margin: 0; }
+.help b { color: var(--ink); }
+[hidden], .overlay[hidden] { display: none !important; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: rgba(10, 15, 20, .55);
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.modal {
+  background: var(--paper); color: var(--ink); border-radius: 12px; padding: 18px;
+  width: min(820px, 100%); max-height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 12px;
+}
+.mhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.mhead h2 { margin: 0; font-size: 1.2rem; }
+.mctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.mctrl input[type=number] { width: 4.5em; font: inherit; font-family: var(--mono); padding: 6px 8px; border-radius: 7px; border: 1px solid var(--grid); background: var(--bg); color: var(--ink); }
+.mctrl .tog { margin-left: 8px; }
+.shapeList { overflow: auto; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; align-content: flex-start; padding: 4px; min-height: 120px; }
+.thumb { display: block; width: auto; max-width: 100%; cursor: default; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>It's a Metric, Too</h1>
+    <p>Board for the <a href="https://www.janestreet.com/puzzles/current-puzzle/" target="_blank" rel="noopener">Jane Street puzzle</a></p>
+  </header>
+  <div class="main">
+    <div class="board"><svg id="svg" viewBox="-12 -12 1124 1124" aria-label="11 by 11 puzzle grid"></svg></div>
+    <div class="side">
+      <div class="panel">
+        <div class="label">Level</div>
+        <div class="seg" role="group" aria-label="Level">
+          <button type="button" data-level="puzzle" aria-pressed="true">Puzzle 11×11</button>
+          <button type="button" data-level="example" aria-pressed="false">Example 5×5</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="label">Check</div>
+        <div class="stat"><span>Clues matching</span><b id="sClues">–</b></div>
+        <div class="stat"><span>States</span><b id="sStates">–</b></div>
+        <div class="stat"><span>Not symmetric</span><b id="sAsym">–</b></div>
+        <div class="stat"><span>Capitols</span><b id="sCaps">–</b></div>
+      </div>
+      <div class="panel">
+        <div class="label">Answer if solved</div>
+        <div class="answer" id="answer">–</div>
+        <div class="rows" id="rows"></div>
+      </div>
+      <div class="panel">
+        <div class="label">View</div>
+        <label class="tog"><input type="checkbox" id="tColor" checked> Colour states</label>
+        <label class="tog"><input type="checkbox" id="tSize"> Show state sizes</label>
+        <label class="tog"><input type="checkbox" id="tCost"> Show travel cost in every cell</label>
+        <label class="tog"><input type="checkbox" id="tPath" checked> Show route on hover</label>
+        <div class="btns">
+          <button id="bUndo" type="button">Undo</button>
+          <button id="bRedo" type="button">Redo</button>
+          <button id="bClear" type="button">Clear</button>
+          <button id="bShapes" type="button">Browse states</button>
+        </div>
+        <div class="btns" id="confirmRow" hidden>
+          <span>Remove every wall?</span>
+          <button id="bYes" type="button">Clear</button>
+          <button id="bNo" type="button">Keep</button>
+        </div>
+      </div>
+      <p class="help"><b>Click or drag</b> along a line between cells to add a wall; do the same on a wall to remove it. States are coloured automatically. The capitol (dot) is found from each state's symmetry. With <b>Show route on hover</b> on, rest the mouse on a cell for a second to see its cheapest route to a capitol. Clues turn <span class="good">green</span> when the cheapest trip to a capitol equals the clue, <span class="badc">red</span> otherwise. Walls save in this browser.</p>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="shapes" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shapesTitle">
+    <div class="mhead">
+      <h2 id="shapesTitle">Possible states</h2>
+      <button id="shapeClose" type="button" aria-label="Close">Close</button>
+    </div>
+    <div class="mctrl">
+      <label for="shapeN">Squares</label>
+      <button id="shapeMinus" type="button" aria-label="One fewer square">−</button>
+      <input id="shapeN" type="number" min="1" max="12" value="5">
+      <button id="shapePlus" type="button" aria-label="One more square">+</button>
+      <label class="tog"><input type="checkbox" id="shapeCap"> Only with a capitol</label>
+    </div>
+    <p class="help" id="shapeInfo"></p>
+    <div class="shapeList" id="shapeList"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+let N = 11; const S = 100;
+const MAIN_CLUES = {
+  "0,1":8,"0,2":4,"0,5":11,"0,9":5,
+  "1,7":11,
+  "2,2":7,"2,5":1,"2,10":14,
+  "3,0":28,"3,3":51,"3,6":1,"3,8":6,
+  "4,1":22,"4,8":4,"4,10":1,
+  "5,3":15,"5,5":10,"5,7":0,
+  "6,0":11,"6,2":11,"6,9":9,
+  "7,2":17,"7,4":14,"7,7":10,"7,10":13,
+  "8,0":30,"8,5":6,"8,8":45,
+  "9,3":10,
+  "10,1":26,"10,5":0,"10,8":77,"10,9":61
+};
+const LEVELS = {
+  puzzle: { n: 11, clues: MAIN_CLUES, key: "metric-too-walls-v1" },
+  example: {
+    n: 5, key: "metric-too-walls-example",
+    clues: { "0,0":12,"0,4":17, "1,0":8,"1,2":6,"1,3":3, "3,1":7,"3,2":6,"3,4":10, "4,0":25,"4,4":0 }
+  }
+};
+let level = "puzzle", CLUES = MAIN_CLUES, KEY = LEVELS.puzzle.key;
+let walls = new Set();
+const undo = [], redo = [];
+function loadLevel(name) {
+  level = LEVELS[name] ? name : "puzzle";
+  const L = LEVELS[level];
+  N = L.n; CLUES = L.clues; KEY = L.key;
+  walls = new Set();
+  try { const s = JSON.parse(localStorage.getItem(KEY) || "[]"); if (Array.isArray(s)) walls = new Set(s); } catch (e) {}
+  try { localStorage.setItem("metric-too-level", level); } catch (e) {}
+  undo.length = 0; redo.length = 0;
+  hoverEdge = hoverCell = pathCell = null; clearTimeout(hoverTimer);
+  svg.setAttribute("viewBox", `-12 -12 ${N*S + 24} ${N*S + 24}`);
+  svg.setAttribute("aria-label", `${N} by ${N} puzzle grid`);
+  for (const b of document.querySelectorAll("[data-level]")) b.setAttribute("aria-pressed", b.dataset.level === level);
+}
+const opts = { color: true, size: false, cost: false, path: true };
+
+const svg = document.getElementById("svg");
+const NS = "http://www.w3.org/2000/svg";
+const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+
+// Edge keys: "h,r,c" is the wall above cell (r,c); "v,r,c" is the wall left of cell (r,c).
+function blocked(r, c, r2, c2) {
+  if (r2 === r) return walls.has(`v,${r},${Math.max(c, c2)}`);
+  return walls.has(`h,${Math.max(r, r2)},${c}`);
+}
+const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+
+// Symmetry: try the 7 non-identity moves of the square, aligned by bounding box.
+const T = [p => [-p[1], p[0]], p => [-p[0], -p[1]], p => [p[1], -p[0]], p => [-p[0], p[1]], p => [p[0], -p[1]], p => [p[1], p[0]], p => [-p[1], -p[0]]];
+function symInfo(cells) {
+  const set = new Set(cells.map(p => p + ""));
+  const mr = Math.min(...cells.map(p => p[0])), mc = Math.min(...cells.map(p => p[1]));
+  let nSym = 0, capitol = null, ok = true;
+  for (const f of T) {
+    const m = cells.map(f);
+    const tr = mr - Math.min(...m.map(p => p[0])), tc = mc - Math.min(...m.map(p => p[1]));
+    const moved = m.map(p => [p[0] + tr, p[1] + tc]);
+    if (!moved.every(p => set.has(p + ""))) continue;
+    nSym++;
+    const fixed = cells.filter((p, i) => moved[i][0] === p[0] && moved[i][1] === p[1]);
+    if (fixed.length !== 1) ok = false;
+    else if (capitol && capitol + "" !== fixed[0] + "") ok = false;
+    else capitol = fixed[0];
+  }
+  return { symmetric: nSym > 0, capitol: nSym > 0 && ok ? capitol : null };
+}
+
+function analyse() {
+  const id = Array.from({length: N}, () => Array(N).fill(-1));
+  const regions = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (id[r][c] >= 0) continue;
+    const cells = [[r, c]], k = regions.length; id[r][c] = k;
+    for (let i = 0; i < cells.length; i++) {
+      const [a, b] = cells[i];
+      for (const [dr, dc] of DIRS) {
+        const x = a + dr, y = b + dc;
+        if (x < 0 || y < 0 || x >= N || y >= N || id[x][y] >= 0 || blocked(a, b, x, y)) continue;
+        id[x][y] = k; cells.push([x, y]);
+      }
+    }
+    regions.push({ cells, size: cells.length });
+  }
+  for (const R of regions) Object.assign(R, symInfo(R.cells));
+  // Cheapest travel cost from every cell to its nearest capitol (Dijkstra, run from the capitols).
+  const dist = Array.from({length: N}, () => Array(N).fill(Infinity));
+  const done = Array.from({length: N}, () => Array(N).fill(false));
+  for (const R of regions) if (R.capitol) dist[R.capitol[0]][R.capitol[1]] = 0;
+  for (;;) {
+    let br = -1, bc = -1, bd = Infinity;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!done[r][c] && dist[r][c] < bd) { bd = dist[r][c]; br = r; bc = c; }
+    if (br < 0) break;
+    done[br][bc] = true;
+    for (const [dr, dc] of DIRS) {
+      const x = br + dr, y = bc + dc;
+      if (x < 0 || y < 0 || x >= N || y >= N || done[x][y]) continue;
+      const w = Math.min(regions[id[br][bc]].size, regions[id[x][y]].size);
+      if (bd + w < dist[x][y]) dist[x][y] = bd + w;
+    }
+  }
+  return { id, regions, dist };
+}
+
+function hue(R) { // stable colour from the region's top-left cell
+  const [r, c] = R.cells.reduce((a, b) => (b[0] < a[0] || (b[0] === a[0] && b[1] < a[1])) ? b : a);
+  return ((r * N + c) * 137.508) % 360;
+}
+
+// Arrows along every cheapest route from cell p to a capitol (ties all shown), with each step's cost.
+function drawPath(g, p, id, regions, dist) {
+  const [pr, pc] = p;
+  g.append(el("rect", {x: pc*S + 5, y: pr*S + 5, width: S - 10, height: S - 10, fill: "none", stroke: "var(--path)", "stroke-width": 6, rx: 6}));
+  if (dist[pr][pc] === Infinity) return;
+  const defs = el("defs");
+  const mk = el("marker", {id: "arrowHead", viewBox: "0 0 10 10", refX: 7, refY: 5, markerWidth: 3.2, markerHeight: 3.2, orient: "auto"});
+  mk.append(el("path", {d: "M0,0 L10,5 L0,10 z", fill: "var(--path)"}));
+  defs.append(mk); g.append(defs);
+  const W = (a, b, x, y) => Math.min(regions[id[a][b]].size, regions[id[x][y]].size);
+  const seen = new Set([pr + "," + pc]), q = [[pr, pc]];
+  while (q.length) {
+    const [a, b] = q.shift();
+    if (dist[a][b] === 0) continue;
+    for (const [dr, dc] of DIRS) {
+      const x = a + dr, y = b + dc;
+      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+      const w = W(a, b, x, y);
+      if (dist[x][y] + w !== dist[a][b]) continue;
+      const x1 = b*S + S/2 + dc*16, y1 = a*S + S/2 + dr*16, x2 = y*S + S/2 - dc*24, y2 = x*S + S/2 - dr*24;
+      g.append(el("line", {x1, y1, x2, y2, stroke: "var(--path)", "stroke-width": 7, "stroke-linecap": "round", "marker-end": "url(#arrowHead)"}));
+      const mx = (b + y + 1) * S / 2 + (dr ? 14 : 0), my = (a + x + 1) * S / 2 + (dc ? -14 : 0);
+      g.append(el("text", {x: mx, y: my, "text-anchor": dr ? "start" : "middle", "dominant-baseline": "middle", "font-family": "var(--mono)", "font-size": 20, "font-weight": 700, fill: "var(--path)", stroke: "var(--paper)", "stroke-width": 5, "paint-order": "stroke"}, w));
+      if (!seen.has(x + "," + y)) { seen.add(x + "," + y); q.push([x, y]); }
+    }
+  }
+}
+
+let hoverEdge = null, hoverCell = null, pathCell = null, hoverTimer = null;
+function render() {
+  const { id, regions, dist } = analyse();
+  svg.replaceChildren();
+  const g = (cls) => { const e = el("g", cls ? {class: cls} : {}); svg.append(e); return e; };
+  const fills = g(), lines = g(), text = g(), wl = g(), hv = g();
+  fills.append(el("rect", {x: 0, y: 0, width: N*S, height: N*S, fill: "var(--paper)"}));
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const R = regions[id[r][c]];
+    if (opts.color && regions.length > 1) {
+      fills.append(el("rect", {x: c*S, y: r*S, width: S, height: S, fill: `hsla(${hue(R)}, 75%, 58%, ${R.symmetric ? .3 : .12})`}));
+      if (!R.symmetric) fills.append(el("rect", {x: c*S+4, y: r*S+4, width: S-8, height: S-8, fill: "none", stroke: "var(--bad)", "stroke-width": 2, "stroke-dasharray": "6 6", opacity: .5}));
+    }
+  }
+  for (let i = 1; i < N; i++) {
+    lines.append(el("line", {x1: i*S, y1: 0, x2: i*S, y2: N*S, stroke: "var(--grid)", "stroke-width": 2}));
+    lines.append(el("line", {x1: 0, y1: i*S, x2: N*S, y2: i*S, stroke: "var(--grid)", "stroke-width": 2}));
+  }
+  let match = 0, total = 0;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const R = regions[id[r][c]], d = dist[r][c], clue = CLUES[r + "," + c];
+    const cx = c*S + S/2, cy = r*S + S/2;
+    if (R.capitol && R.capitol[0] === r && R.capitol[1] === c)
+      text.append(el("circle", {cx, cy: clue != null ? cy + 30 : cy, r: clue != null ? 7 : 11, fill: "var(--ink)"}));
+    if (clue != null) {
+      total++;
+      const good = d === clue; if (good) match++;
+      const col = walls.size === 0 ? "var(--ink)" : good ? "var(--ok)" : "var(--bad)";
+      text.append(el("text", {x: cx, y: cy + 4, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "var(--sans)", "font-size": 46, "font-weight": 600, fill: col}, clue));
+      if (opts.cost && !good && walls.size) text.append(el("text", {x: c*S + S - 6, y: r*S + S - 8, "text-anchor": "end", "font-family": "var(--mono)", "font-size": 18, fill: "var(--bad)"}, d === Infinity ? "∞" : d));
+    } else if (opts.cost) {
+      text.append(el("text", {x: cx, y: cy + 2, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "var(--mono)", "font-size": 26, fill: "var(--muted)"}, d === Infinity ? "∞" : d));
+    }
+    if (opts.size) text.append(el("text", {x: c*S + 7, y: r*S + 22, "font-family": "var(--mono)", "font-size": 18, "font-weight": 700, fill: "var(--accent)"}, R.size));
+  }
+  for (const k of walls) {
+    const [t, r, c] = k.split(","); const R = +r, C = +c;
+    const a = t === "h" ? {x1: C*S, y1: R*S, x2: C*S+S, y2: R*S} : {x1: C*S, y1: R*S, x2: C*S, y2: R*S+S};
+    const dangling = id[t === "h" ? R-1 : R][t === "h" ? C : C-1] === id[R][C];
+    wl.append(el("line", {...a, stroke: dangling ? "var(--muted)" : "var(--wall)", "stroke-width": 9, "stroke-linecap": "round"}));
+  }
+  wl.append(el("rect", {x: 0, y: 0, width: N*S, height: N*S, fill: "none", stroke: "var(--wall)", "stroke-width": 10}));
+  if (hoverEdge) {
+    const [t, r, c] = hoverEdge.split(","); const R = +r, C = +c;
+    const a = t === "h" ? {x1: C*S+8, y1: R*S, x2: C*S+S-8, y2: R*S} : {x1: C*S, y1: R*S+8, x2: C*S, y2: R*S+S-8};
+    hv.append(el("line", {...a, stroke: "var(--hover)", "stroke-width": 9, "stroke-linecap": "round"}));
+  }
+  if (pathCell) drawPath(hv, pathCell, id, regions, dist);
+
+  // Side panel
+  const asym = regions.filter(R => !R.symmetric).length;
+  const caps = regions.filter(R => R.capitol).length;
+  const set = (i, v, cls) => { const e = document.getElementById(i); e.textContent = v; e.className = cls || ""; };
+  set("sClues", `${match} / ${total}`, match === total ? "good" : "");
+  set("sStates", regions.length);
+  set("sAsym", asym, asym ? "badc" : "good");
+  set("sCaps", caps);
+  const sums = Array.from({length: N}, (_, r) => Array.from({length: N}, (_, c) => regions[id[r][c]].size).reduce((a, b) => a + b, 0));
+  const ans = sums.reduce((a, b) => a + b*b, 0);
+  const solved = match === total && asym === 0;
+  set("answer", ans.toLocaleString("en-US"), solved ? "answer good" : "answer");
+  document.getElementById("rows").textContent = (solved ? "Every clue matches. " : "Not solved yet. ") + "Row sums: " + sums.join(", ");
+}
+
+// Map a pointer position to the nearest interior edge.
+function toUV(ev) {
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+  return [p.x / S, p.y / S];
+}
+function cellAt(ev) {
+  const [u, v] = toUV(ev);
+  const r = Math.floor(v), c = Math.floor(u);
+  return r >= 0 && c >= 0 && r < N && c < N ? [r, c] : null;
+}
+function clearHover() {
+  clearTimeout(hoverTimer); hoverCell = null;
+  if (pathCell) { pathCell = null; return true; }
+  return false;
+}
+function edgeAt(ev) {
+  const [u, v] = toUV(ev);
+  if (u < 0 || v < 0 || u > N || v > N) return null;
+  const cv = Math.round(u), dx = Math.abs(u - cv), rh = Math.round(v), dy = Math.abs(v - rh);
+  if (Math.min(dx, dy) > 0.3) return null;
+  if (dx < dy) { const r = Math.floor(v); return cv >= 1 && cv < N && r < N ? `v,${r},${cv}` : null; }
+  const c = Math.floor(u); return rh >= 1 && rh < N && c < N ? `h,${rh},${c}` : null;
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify([...walls])); } catch (e) {} }
+function snapshot() { undo.push([...walls]); if (undo.length > 500) undo.shift(); redo.length = 0; }
+
+let drag = null;
+svg.addEventListener("pointerdown", ev => {
+  const e = edgeAt(ev); if (!e) return;
+  ev.preventDefault();
+  clearHover();
+  snapshot();
+  drag = { add: !walls.has(e), changed: false };
+  drag.add ? walls.add(e) : walls.delete(e);
+  svg.setPointerCapture(ev.pointerId);
+  render();
+});
+svg.addEventListener("pointermove", ev => {
+  const e = edgeAt(ev);
+  if (drag) {
+    if (e && walls.has(e) !== drag.add) { drag.add ? walls.add(e) : walls.delete(e); render(); }
+  } else if (ev.pointerType === "mouse") {
+    let dirty = false;
+    if (e !== hoverEdge) { hoverEdge = e; dirty = true; }
+    const cell = cellAt(ev), key = cell ? cell + "" : null;
+    if (key !== (hoverCell && hoverCell + "")) {
+      if (clearHover()) dirty = true;
+      hoverCell = cell;
+      if (cell && opts.path) hoverTimer = setTimeout(() => { pathCell = cell; render(); }, 1000);
+    }
+    if (dirty) render();
+  }
+});
+const end = () => { if (drag) { drag = null; save(); render(); } };
+svg.addEventListener("pointerup", end);
+svg.addEventListener("pointercancel", end);
+svg.addEventListener("pointerleave", () => {
+  if (drag) return;
+  const had = clearHover() || hoverEdge; hoverEdge = null;
+  if (had) render();
+});
+
+function restore(from, to) { if (!from.length) return; to.push([...walls]); walls = new Set(from.pop()); save(); render(); }
+document.getElementById("bUndo").onclick = () => restore(undo, redo);
+document.getElementById("bRedo").onclick = () => restore(redo, undo);
+document.addEventListener("keydown", ev => {
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? restore(redo, undo) : restore(undo, redo); }
+  else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "y") { ev.preventDefault(); restore(redo, undo); }
+});
+const confirmRow = document.getElementById("confirmRow");
+document.getElementById("bClear").onclick = () => { if (walls.size) confirmRow.hidden = false; };
+document.getElementById("bNo").onclick = () => { confirmRow.hidden = true; };
+document.getElementById("bYes").onclick = () => { snapshot(); walls.clear(); save(); confirmRow.hidden = true; render(); };
+for (const [i, k] of [["tColor", "color"], ["tSize", "size"], ["tCost", "cost"], ["tPath", "path"]]) {
+  const box = document.getElementById(i); box.checked = opts[k];
+  box.onchange = () => { opts[k] = box.checked; if (k === "path") clearHover(); render(); };
+}
+// ---- Shape browser: every free polyomino of size n, kept if symmetric ----
+const MAXN = 12;
+const levels = [null, ["0,0"]]; // levels[k] = canonical keys of all free polyominoes with k squares
+const ALL8 = [p => p, ...T];
+function canon(cells) {
+  let best = null;
+  for (const f of ALL8) {
+    const m = cells.map(f);
+    const r0 = Math.min(...m.map(p => p[0])), c0 = Math.min(...m.map(p => p[1]));
+    const k = m.map(p => [p[0] - r0, p[1] - c0]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).join(";");
+    if (best === null || k < best) best = k;
+  }
+  return best;
+}
+const parse = k => k.split(";").map(s => s.split(",").map(Number));
+function grow(n) {
+  while (levels.length <= n) {
+    const next = new Set();
+    for (const k of levels[levels.length - 1]) {
+      const cells = parse(k), have = new Set(cells.map(p => p + ""));
+      for (const [r, c] of cells) for (const [dr, dc] of DIRS) {
+        const q = [r + dr, c + dc];
+        if (have.has(q + "")) continue;
+        next.add(canon([...cells, q]));
+      }
+    }
+    levels.push([...next]);
+  }
+  return levels[n];
+}
+const shapeCache = {};
+function shapesFor(n) {
+  if (!shapeCache[n]) {
+    shapeCache[n] = grow(n).map(parse)
+      .filter(cells => Math.max(...cells.map(p => p[0])) < N && Math.max(...cells.map(p => p[1])) < N)
+      .map(cells => ({ cells, ...symInfo(cells) }))
+      .filter(s => s.symmetric);
+  }
+  return shapeCache[n];
+}
+function thumb(s) {
+  const h = Math.max(...s.cells.map(p => p[0])) + 1, w = Math.max(...s.cells.map(p => p[1])) + 1, u = 16;
+  const t = el("svg", {viewBox: `-2 -2 ${w*u + 4} ${h*u + 4}`, width: w*u + 4, height: h*u + 4, class: "thumb"});
+  for (const [r, c] of s.cells) t.append(el("rect", {x: c*u, y: r*u, width: u, height: u, fill: "var(--accent)", "fill-opacity": .28, stroke: "var(--wall)", "stroke-width": 1.5}));
+  if (s.capitol) t.append(el("circle", {cx: s.capitol[1]*u + u/2, cy: s.capitol[0]*u + u/2, r: 3.5, fill: "var(--ink)"}));
+  return t;
+}
+const modal = document.getElementById("shapes"), nIn = document.getElementById("shapeN"), capIn = document.getElementById("shapeCap");
+const list = document.getElementById("shapeList"), info = document.getElementById("shapeInfo");
+let showLimit = 300, job = 0;
+function showShapes() {
+  let n = Math.round(+nIn.value);
+  if (!(n >= 1)) n = 1; if (n > MAXN) n = MAXN; nIn.value = n;
+  const my = ++job;
+  const slow = !shapeCache[n] && n >= 11;
+  info.textContent = slow ? "Working it out. Size 11 takes a few seconds and size 12 about 10 seconds; the page pauses meanwhile." : "";
+  list.replaceChildren();
+  setTimeout(() => {
+    if (my !== job) return;
+    const all = shapesFor(n), shown = capIn.checked ? all.filter(s => s.capitol) : all;
+    const withCap = all.filter(s => s.capitol).length;
+    info.textContent = `${all.length} symmetric shape${all.length === 1 ? "" : "s"} of size ${n}, ${withCap} with a capitol. Showing ${Math.min(shown.length, showLimit)} of ${shown.length}. Rotations and reflections count once.`;
+    for (const s of shown.slice(0, showLimit)) list.append(thumb(s));
+    if (shown.length > showLimit) {
+      const more = document.createElement("button"); more.type = "button"; more.textContent = "Show all";
+      more.onclick = () => { showLimit = Infinity; showShapes(); };
+      list.append(more);
+    }
+  }, 20);
+}
+document.getElementById("bShapes").onclick = () => { modal.hidden = false; showLimit = 300; showShapes(); nIn.focus(); };
+document.getElementById("shapeClose").onclick = () => { modal.hidden = true; };
+modal.addEventListener("click", ev => { if (ev.target === modal) modal.hidden = true; });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") modal.hidden = true; });
+nIn.addEventListener("input", () => { showLimit = 300; showShapes(); });
+capIn.addEventListener("change", () => { showLimit = 300; showShapes(); });
+document.getElementById("shapeMinus").onclick = () => { nIn.value = Math.max(1, +nIn.value - 1); showLimit = 300; showShapes(); };
+document.getElementById("shapePlus").onclick = () => { nIn.value = Math.min(MAXN, +nIn.value + 1); showLimit = 300; showShapes(); };
+
+for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => {
+  if (b.dataset.level === level) return;
+  loadLevel(b.dataset.level);
+  for (const k in shapeCache) delete shapeCache[k]; // shapes must fit the new board
+  confirmRow.hidden = true;
+  render();
+};
+
+let startLevel = "puzzle";
+try { startLevel = localStorage.getItem("metric-too-level") || "puzzle"; } catch (e) {}
+loadLevel(startLevel);
+render();
+})();
+</script>
+
+</html>
