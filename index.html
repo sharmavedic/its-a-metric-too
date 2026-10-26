@@ -441,6 +441,7 @@ function findSolves(N, wallList, cellList, progress) {
       sizeOf = i => sizes[id[i]];
     } else sizeOf = i => A.regions[A.id[i / N | 0][i % N]].size;
     for (const [i, v] of checks) {
+      if (owner[i] < 0) continue; // only cells covered by a found state are checked
       if (v.size && !v.size.has(sizeOf(i))) return;
       if (v.cost && !v.cost.has(A.dist[i / N | 0][i % N])) return;
     }
@@ -830,7 +831,7 @@ const sizeChips = document.getElementById("sizeChips"), useClue = document.getEl
 const MODE_HELP = {
   ignore: "Find solve doesn't use this cell.",
   solve: "Find solve must place a state that covers this cell. Its size and travel cost must be allowed below.",
-  constraint: "Find solve only keeps results where this cell's state size and travel cost are allowed below. The cell doesn't need to be covered."
+  constraint: "When a found state covers this cell, Find solve only keeps it if this cell's state size and travel cost are allowed below. Results that don't cover this cell ignore it."
 };
 let popKey = null;
 for (let i = 1; i <= SOLVE_LIMITS.hardMax; i++) {
