@@ -96,6 +96,24 @@ label.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .mctrl .tog { margin-left: 8px; }
 .shapeList { overflow: auto; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; align-content: flex-start; padding: 4px; min-height: 120px; }
 .thumb { display: block; width: auto; max-width: 100%; cursor: default; }
+button.primary { background: var(--path); border-color: var(--path); color: var(--paper); }
+.nav { display: grid; gap: 8px; }
+.navrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.navrow b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.navrow button { min-width: 3em; }
+.cellModal { width: min(480px, 100%); grid-template-rows: none; overflow: auto; }
+.modes { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.modes legend { margin-bottom: 6px; padding: 0; }
+.modes label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+.field { display: grid; gap: 6px; }
+.field input[type=text] { font: inherit; font-family: var(--mono); padding: 7px 9px; border-radius: 7px; border: 1px solid var(--grid); background: var(--bg); color: var(--ink); min-width: 0; width: 100%; box-sizing: border-box; }
+.inrow { display: flex; gap: 8px; }
+.inrow input { flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-family: var(--mono); font-weight: 500; padding: 4px 0; width: 2.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.err { color: var(--bad); font-size: .85rem; min-height: 0; }
+.err:empty { display: none; }
 </style>
 
 <div class="wrap">
@@ -112,6 +130,25 @@ label.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; }
           <button type="button" data-level="puzzle" aria-pressed="true">Puzzle 11×11</button>
           <button type="button" data-level="example" aria-pressed="false">Example 5×5</button>
         </div>
+      </div>
+      <div class="panel">
+        <div class="label">Find solve</div>
+        <div class="btns">
+          <button id="bFind" type="button" class="primary">Find solve</button>
+          <button id="bStop" type="button" hidden>Stop</button>
+        </div>
+        <div class="nav" id="findNav" hidden>
+          <div class="navrow">
+            <button id="bPrev" type="button" aria-label="Previous arrangement">←</button>
+            <b id="findCount">1 / 1</b>
+            <button id="bNext" type="button" aria-label="Next arrangement">→</button>
+          </div>
+          <div class="btns">
+            <button id="bKeep" type="button">Keep these walls</button>
+            <button id="bClearFound" type="button">Clear found</button>
+          </div>
+        </div>
+        <p class="help" id="findStatus" aria-live="polite"></p>
       </div>
       <div class="panel">
         <div class="label">Check</div>
@@ -143,7 +180,7 @@ label.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; }
           <button id="bNo" type="button">Keep</button>
         </div>
       </div>
-      <p class="help"><b>Click or drag</b> along a line between cells to add a wall; do the same on a wall to remove it. States are coloured automatically. The capitol (dot) is found from each state's symmetry. With <b>Show route on hover</b> on, rest the mouse on a cell for a second to see its cheapest route to a capitol. Clues turn <span class="good">green</span> when the cheapest trip to a capitol equals the clue, <span class="badc">red</span> otherwise. Walls save in this browser.</p>
+      <p class="help"><b>Click or drag</b> along a line between cells to add a wall; do the same on a wall to remove it. States are coloured automatically. The capitol (dot) is found from each state's symmetry. With <b>Show route on hover</b> on, rest the mouse on a cell for a second to see its cheapest route to a capitol. Clues turn <span class="good">green</span> when the cheapest trip to a capitol equals the clue, <span class="badc">red</span> otherwise. <b>Click inside a cell</b> to mark it Solve or Constraint and set its allowed state sizes and travel costs. Found arrangements are drawn in orange; use the arrows or the ← → keys to page through them. Walls and cell settings save in this browser.</p>
     </div>
   </div>
 </div>
@@ -165,6 +202,269 @@ label.tog { display: flex; align-items: center; gap: 8px; cursor: pointer; }
     <div class="shapeList" id="shapeList"></div>
   </div>
 </div>
+
+<div class="overlay" id="cellPop" hidden>
+  <div class="modal cellModal" role="dialog" aria-modal="true" aria-labelledby="cellTitle">
+    <div class="mhead">
+      <h2 id="cellTitle">Cell</h2>
+      <button id="cellClose" type="button">Done</button>
+    </div>
+    <fieldset class="modes">
+      <legend class="label">Use this cell for</legend>
+      <label><input type="radio" name="cellMode" value="ignore" id="mIgnore"> Ignore</label>
+      <label><input type="radio" name="cellMode" value="solve" id="mSolve"> Solve</label>
+      <label><input type="radio" name="cellMode" value="constraint" id="mCons"> Constraint</label>
+    </fieldset>
+    <p class="help" id="modeHelp"></p>
+    <div class="field">
+      <label class="label" for="cellSize">Allowed state sizes</label>
+      <input id="cellSize" type="text" autocomplete="off" placeholder="Any size (e.g. 5, 7, 9-13)">
+      <div class="chips" id="sizeChips" aria-label="Toggle sizes"></div>
+      <div class="err" id="sizeErr"></div>
+    </div>
+    <div class="field">
+      <label class="label" for="cellCost">Allowed travel costs</label>
+      <div class="inrow">
+        <input id="cellCost" type="text" autocomplete="off" placeholder="Any cost (e.g. 11 or 10-14)">
+        <button id="useClue" type="button" hidden>Use clue</button>
+      </div>
+      <div class="err" id="costErr"></div>
+    </div>
+    <div class="btns"><button id="cellReset" type="button">Reset this cell</button></div>
+  </div>
+</div>
+
+<script id="core">
+// Pure puzzle logic, shared by the page and the background search worker.
+const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+
+// Symmetry: try the 7 non-identity moves of the square, aligned by bounding box.
+const T = [p => [-p[1], p[0]], p => [-p[0], -p[1]], p => [p[1], -p[0]], p => [-p[0], p[1]], p => [p[0], -p[1]], p => [p[1], p[0]], p => [-p[1], -p[0]]];
+function symInfo(cells) {
+  const set = new Set(cells.map(p => p + ""));
+  const mr = Math.min(...cells.map(p => p[0])), mc = Math.min(...cells.map(p => p[1]));
+  let nSym = 0, capitol = null, ok = true;
+  for (const f of T) {
+    const m = cells.map(f);
+    const tr = mr - Math.min(...m.map(p => p[0])), tc = mc - Math.min(...m.map(p => p[1]));
+    const moved = m.map(p => [p[0] + tr, p[1] + tc]);
+    if (!moved.every(p => set.has(p + ""))) continue;
+    nSym++;
+    const fixed = cells.filter((p, i) => moved[i][0] === p[0] && moved[i][1] === p[1]);
+    if (fixed.length !== 1) ok = false;
+    else if (capitol && capitol + "" !== fixed[0] + "") ok = false;
+    else capitol = fixed[0];
+  }
+  return { symmetric: nSym > 0, capitol: nSym > 0 && ok ? capitol : null };
+}
+
+// Edge keys: "h,r,c" is the wall above cell (r,c); "v,r,c" is the wall left of cell (r,c).
+function edgeKey(r, c, r2, c2) {
+  return r === r2 ? `v,${r},${Math.max(c, c2)}` : `h,${Math.max(r, r2)},${c}`;
+}
+
+// States (regions), their sizes, capitols, and every cell's cheapest travel cost to a capitol.
+function analyseBoard(N, walls) {
+  const id = Array.from({length: N}, () => Array(N).fill(-1));
+  const regions = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (id[r][c] >= 0) continue;
+    const cells = [[r, c]], k = regions.length; id[r][c] = k;
+    for (let i = 0; i < cells.length; i++) {
+      const [a, b] = cells[i];
+      for (const [dr, dc] of DIRS) {
+        const x = a + dr, y = b + dc;
+        if (x < 0 || y < 0 || x >= N || y >= N || id[x][y] >= 0 || walls.has(edgeKey(a, b, x, y))) continue;
+        id[x][y] = k; cells.push([x, y]);
+      }
+    }
+    regions.push({ cells, size: cells.length });
+  }
+  for (const R of regions) Object.assign(R, symInfo(R.cells));
+  const dist = Array.from({length: N}, () => Array(N).fill(Infinity));
+  const done = Array.from({length: N}, () => Array(N).fill(false));
+  for (const R of regions) if (R.capitol) dist[R.capitol[0]][R.capitol[1]] = 0;
+  for (;;) {
+    let br = -1, bc = -1, bd = Infinity;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!done[r][c] && dist[r][c] < bd) { bd = dist[r][c]; br = r; bc = c; }
+    if (br < 0) break;
+    done[br][bc] = true;
+    for (const [dr, dc] of DIRS) {
+      const x = br + dr, y = bc + dc;
+      if (x < 0 || y < 0 || x >= N || y >= N || done[x][y]) continue;
+      const w = Math.min(regions[id[br][bc]].size, regions[id[x][y]].size);
+      if (bd + w < dist[x][y]) dist[x][y] = bd + w;
+    }
+  }
+  return { id, regions, dist };
+}
+
+// "5, 7, 9-13" -> set of allowed numbers; empty text means any number.
+function parseNums(text) {
+  const t = String(text || "").trim();
+  if (!t) return { set: null, bad: [] };
+  const set = new Set(), bad = [];
+  for (const tok of t.split(/[\s,;]+/).filter(Boolean)) {
+    let m;
+    if ((m = tok.match(/^(\d+)$/))) set.add(+m[1]);
+    else if ((m = tok.match(/^(\d+)[-–](\d+)$/))) {
+      let a = +m[1], b = +m[2]; if (a > b) [a, b] = [b, a];
+      if (b - a > 5000) { bad.push(tok); continue; }
+      for (let i = a; i <= b; i++) set.add(i);
+    } else bad.push(tok);
+  }
+  return { set, bad };
+}
+
+const SOLVE_LIMITS = { autoMax: 12, hardMax: 25, nodes: 6e6, perCell: 3e5, evals: 3e5, results: 5000 };
+
+// Find every set of non-overlapping symmetric states covering all "solve" cells, such that once
+// they are drawn on the board, every solve/constraint cell's state size and travel cost are allowed.
+// cellList: [{ r, c, mode: "solve" | "constraint", size: number[] | null, cost: number[] | null }]
+function findSolves(N, wallList, cellList, progress) {
+  const L = SOLVE_LIMITS, NN = N * N;
+  const walls = new Set(wallList);
+  const nb = [], wnb = []; // neighbours without / across a wall
+  for (let i = 0; i < NN; i++) {
+    nb.push([]); wnb.push([]);
+    const r = i / N | 0, c = i % N;
+    for (const [dr, dc] of DIRS) {
+      const x = r + dr, y = c + dc;
+      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+      (walls.has(edgeKey(r, c, x, y)) ? wnb : nb)[i].push(x * N + y);
+    }
+  }
+  const cfg = new Map();
+  for (const x of cellList) if (x.mode === "solve" || x.mode === "constraint")
+    cfg.set(x.r * N + x.c, { mode: x.mode, size: x.size ? new Set(x.size) : null, cost: x.cost ? new Set(x.cost) : null });
+  const solve = [...cfg].filter(([, v]) => v.mode === "solve").map(([k]) => k);
+  const out = { solutions: [], stopped: null, notes: [], candidates: [] };
+  if (!solve.length) { out.stopped = "no-solve"; return out; }
+
+  let nodes = 0, evals = 0, tick = 0;
+  const ping = (phase) => { if (progress && ++tick % 20000 === 0) progress({ phase, nodes, evals, found: out.solutions.length }); };
+
+  // Every reflection and half-turn of the plane that could map board cells onto board cells.
+  const isos = [];
+  const mk = f => { const m = new Int32Array(NN); for (let i = 0; i < NN; i++) { const [r2, c2] = f(i / N | 0, i % N); m[i] = r2 >= 0 && c2 >= 0 && r2 < N && c2 < N ? r2 * N + c2 : -1; } return m; };
+  for (let a = 0; a <= 2 * (N - 1); a++) { isos.push(mk((r, c) => [r, a - c])); isos.push(mk((r, c) => [a - r, c])); isos.push(mk((r, c) => [a - c, a - r])); }
+  for (let k = -(N - 1); k <= N - 1; k++) isos.push(mk((r, c) => [c + k, r - k]));
+  for (let a = 0; a <= 2 * (N - 1); a++) for (let b = 0; b <= 2 * (N - 1); b++) isos.push(mk((r, c) => [a - r, b - c]));
+
+  // All symmetric states containing cell X that fit the walls (no wall inside a state).
+  function candidatesFor(X) {
+    const sz = cfg.get(X).size;
+    let maxSize = sz ? Math.max(...sz) : L.autoMax;
+    if (!sz) out.notes.push(`Row ${(X / N | 0) + 1}, column ${X % N + 1} has no size set, so states up to ${L.autoMax} squares were tried.`);
+    if (maxSize > L.hardMax) { maxSize = L.hardMax; out.notes.push(`Sizes above ${L.hardMax} are not searched.`); }
+    const allowed = s => sz ? sz.has(s) : true;
+    const found = new Map();
+    const inSet = new Uint8Array(NN), seen = new Uint8Array(NN), members = [];
+    const xr = X / N | 0, xc = X % N;
+    let size = 0;
+    for (const g of isos) {
+      if (out.stopped) break;
+      const gx = g[X]; if (gx < 0) continue;
+      if (Math.abs((gx / N | 0) - xr) + Math.abs(gx % N - xc) + 1 > maxSize) continue;
+      const orbitOf = i => g[i] < 0 ? -1 : Math.min(i, g[i]);
+      const cellsOf = o => g[o] === o ? [o] : [o, g[o]];
+      const canAdd = oc => {
+        for (const x of oc) for (const y of wnb[x]) if (inSet[y] || (oc.length === 2 && y === (x === oc[0] ? oc[1] : oc[0]))) return false;
+        return true;
+      };
+      const record = () => {
+        if (members.length > 1) { // the orbits touch, but check the squares really join up
+          const q = [members[0]], vis = new Set(q);
+          for (let i = 0; i < q.length; i++) for (const y of nb[q[i]]) if (inSet[y] && !vis.has(y)) { vis.add(y); q.push(y); }
+          if (q.length !== members.length) return;
+        }
+        for (const x of members) { const c = cfg.get(x); if (c && c.size && !c.size.has(size)) return; }
+        const cells = members.slice().sort((a, b) => a - b), key = cells.join(",");
+        if (!found.has(key)) { found.set(key, cells); if (found.size > L.perCell) out.stopped = "shapes"; }
+      };
+      // Redelmeier-style growth over orbits, so each orbit-closed set is visited once.
+      const rec = (untried) => {
+        while (untried.length) {
+          const o = untried.pop(), oc = cellsOf(o);
+          if (size + oc.length > maxSize || !canAdd(oc)) continue;
+          if (++nodes > L.nodes) out.stopped = "shapes";
+          if (out.stopped) return;
+          ping("shapes");
+          for (const x of oc) { inSet[x] = 1; members.push(x); }
+          size += oc.length;
+          if (allowed(size)) record();
+          const added = [];
+          for (const x of oc) for (const y of nb[x]) { const p = orbitOf(y); if (p >= 0 && !seen[p]) { seen[p] = 1; added.push(p); } }
+          rec(untried.concat(added));
+          for (const p of added) seen[p] = 0;
+          for (const x of oc) inSet[x] = 0;
+          members.length -= oc.length; size -= oc.length;
+          if (out.stopped) return;
+        }
+      };
+      seen.fill(0);
+      const root = orbitOf(X); seen[root] = 1;
+      rec([root]);
+    }
+    return [...found.values()];
+  }
+
+  const cands = [];
+  for (const X of solve) {
+    const list = candidatesFor(X);
+    cands.push({ X, list });
+    out.candidates.push({ r: X / N | 0, c: X % N, count: list.length });
+    if (out.stopped) { out.nodes = nodes; out.evals = 0; return out; }
+  }
+  cands.sort((a, b) => a.list.length - b.list.length);
+  out.notes = [...new Set(out.notes)];
+
+  const checks = [...cfg].filter(([, v]) => v.size || v.cost);
+  const needCost = checks.some(([, v]) => v.cost);
+  const used = new Uint8Array(NN), owner = new Int32Array(NN).fill(-1), chosen = [];
+  function evaluate() {
+    if (++evals > L.evals) { out.stopped = "evals"; return; }
+    ping("combine");
+    const w2 = new Set(walls);
+    for (const st of chosen) for (const x of st) for (const y of nb[x])
+      if (owner[y] !== owner[x]) w2.add(edgeKey(x / N | 0, x % N, y / N | 0, y % N));
+    const A = needCost ? analyseBoard(N, w2) : null;
+    let sizeOf;
+    if (!A) { // sizes only: a flood fill is enough
+      const id = new Int32Array(NN).fill(-1), sizes = [];
+      for (let s = 0; s < NN; s++) {
+        if (id[s] >= 0) continue;
+        const q = [s]; id[s] = sizes.length;
+        for (let i = 0; i < q.length; i++) { const a = q[i]; for (const y of nb[a].concat(wnb[a])) if (id[y] < 0 && !w2.has(edgeKey(a / N | 0, a % N, y / N | 0, y % N))) { id[y] = sizes.length; q.push(y); } }
+        sizes.push(q.length);
+      }
+      sizeOf = i => sizes[id[i]];
+    } else sizeOf = i => A.regions[A.id[i / N | 0][i % N]].size;
+    for (const [i, v] of checks) {
+      if (v.size && !v.size.has(sizeOf(i))) return;
+      if (v.cost && !v.cost.has(A.dist[i / N | 0][i % N])) return;
+    }
+    out.solutions.push(chosen.map(s => s.slice()));
+    if (out.solutions.length >= L.results) out.stopped = "results";
+  }
+  function dfs() {
+    let next = null;
+    for (const c of cands) if (!used[c.X]) { next = c; break; }
+    if (!next) { evaluate(); return; }
+    for (const st of next.list) {
+      if (st.some(x => used[x])) continue;
+      const k = chosen.length;
+      for (const x of st) { used[x] = 1; owner[x] = k; }
+      chosen.push(st); dfs(); chosen.pop();
+      for (const x of st) { used[x] = 0; owner[x] = -1; }
+      if (out.stopped) return;
+    }
+  }
+  dfs();
+  out.evals = evals; out.nodes = nodes;
+  return out;
+}
+</script>
 
 <script>
 (() => {
@@ -191,7 +491,10 @@ const LEVELS = {
 };
 let level = "puzzle", CLUES = MAIN_CLUES, KEY = LEVELS.puzzle.key;
 let walls = new Set();
+let cellCfg = {};  // "r,c" -> { mode: "ignore" | "solve" | "constraint", size: "5, 7-9", cost: "11" }
+let found = null;  // { solutions: [[state cells...], ...], idx }
 const undo = [], redo = [];
+function saveCells() { try { localStorage.setItem("metric-too-cells-" + level, JSON.stringify(cellCfg)); } catch (e) {} }
 function loadLevel(name) {
   level = LEVELS[name] ? name : "puzzle";
   const L = LEVELS[level];
@@ -199,6 +502,9 @@ function loadLevel(name) {
   walls = new Set();
   try { const s = JSON.parse(localStorage.getItem(KEY) || "[]"); if (Array.isArray(s)) walls = new Set(s); } catch (e) {}
   try { localStorage.setItem("metric-too-level", level); } catch (e) {}
+  cellCfg = {};
+  try { const c = JSON.parse(localStorage.getItem("metric-too-cells-" + level) || "{}"); if (c && typeof c === "object") cellCfg = c; } catch (e) {}
+  found = null;
   undo.length = 0; redo.length = 0;
   hoverEdge = hoverCell = pathCell = null; clearTimeout(hoverTimer);
   svg.setAttribute("viewBox", `-12 -12 ${N*S + 24} ${N*S + 24}`);
@@ -211,68 +517,23 @@ const svg = document.getElementById("svg");
 const NS = "http://www.w3.org/2000/svg";
 const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
 
-// Edge keys: "h,r,c" is the wall above cell (r,c); "v,r,c" is the wall left of cell (r,c).
-function blocked(r, c, r2, c2) {
-  if (r2 === r) return walls.has(`v,${r},${Math.max(c, c2)}`);
-  return walls.has(`h,${Math.max(r, r2)},${c}`);
-}
-const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
-
-// Symmetry: try the 7 non-identity moves of the square, aligned by bounding box.
-const T = [p => [-p[1], p[0]], p => [-p[0], -p[1]], p => [p[1], -p[0]], p => [-p[0], p[1]], p => [p[0], -p[1]], p => [p[1], p[0]], p => [-p[1], -p[0]]];
-function symInfo(cells) {
-  const set = new Set(cells.map(p => p + ""));
-  const mr = Math.min(...cells.map(p => p[0])), mc = Math.min(...cells.map(p => p[1]));
-  let nSym = 0, capitol = null, ok = true;
-  for (const f of T) {
-    const m = cells.map(f);
-    const tr = mr - Math.min(...m.map(p => p[0])), tc = mc - Math.min(...m.map(p => p[1]));
-    const moved = m.map(p => [p[0] + tr, p[1] + tc]);
-    if (!moved.every(p => set.has(p + ""))) continue;
-    nSym++;
-    const fixed = cells.filter((p, i) => moved[i][0] === p[0] && moved[i][1] === p[1]);
-    if (fixed.length !== 1) ok = false;
-    else if (capitol && capitol + "" !== fixed[0] + "") ok = false;
-    else capitol = fixed[0];
-  }
-  return { symmetric: nSym > 0, capitol: nSym > 0 && ok ? capitol : null };
-}
-
-function analyse() {
-  const id = Array.from({length: N}, () => Array(N).fill(-1));
-  const regions = [];
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    if (id[r][c] >= 0) continue;
-    const cells = [[r, c]], k = regions.length; id[r][c] = k;
-    for (let i = 0; i < cells.length; i++) {
-      const [a, b] = cells[i];
-      for (const [dr, dc] of DIRS) {
-        const x = a + dr, y = b + dc;
-        if (x < 0 || y < 0 || x >= N || y >= N || id[x][y] >= 0 || blocked(a, b, x, y)) continue;
-        id[x][y] = k; cells.push([x, y]);
-      }
-    }
-    regions.push({ cells, size: cells.length });
-  }
-  for (const R of regions) Object.assign(R, symInfo(R.cells));
-  // Cheapest travel cost from every cell to its nearest capitol (Dijkstra, run from the capitols).
-  const dist = Array.from({length: N}, () => Array(N).fill(Infinity));
-  const done = Array.from({length: N}, () => Array(N).fill(false));
-  for (const R of regions) if (R.capitol) dist[R.capitol[0]][R.capitol[1]] = 0;
-  for (;;) {
-    let br = -1, bc = -1, bd = Infinity;
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!done[r][c] && dist[r][c] < bd) { bd = dist[r][c]; br = r; bc = c; }
-    if (br < 0) break;
-    done[br][bc] = true;
+// Walls added by the found arrangement being previewed (outlines of its states), or null.
+function previewWalls() {
+  const sts = currentStates(); if (!sts) return null;
+  const owner = new Map(); sts.forEach((st, k) => st.forEach(i => owner.set(i, k)));
+  const extra = new Set();
+  for (const [i, k] of owner) {
+    const r = i / N | 0, c = i % N;
     for (const [dr, dc] of DIRS) {
-      const x = br + dr, y = bc + dc;
-      if (x < 0 || y < 0 || x >= N || y >= N || done[x][y]) continue;
-      const w = Math.min(regions[id[br][bc]].size, regions[id[x][y]].size);
-      if (bd + w < dist[x][y]) dist[x][y] = bd + w;
+      const x = r + dr, y = c + dc;
+      if (x < 0 || y < 0 || x >= N || y >= N || owner.get(x * N + y) === k) continue;
+      const e = edgeKey(r, c, x, y); if (!walls.has(e)) extra.add(e);
     }
   }
-  return { id, regions, dist };
+  return extra;
 }
+function viewWalls() { const extra = previewWalls(); return extra ? new Set([...walls, ...extra]) : walls; }
+function currentStates() { return found && found.solutions.length ? found.solutions[found.idx] : null; }
 
 function hue(R) { // stable colour from the region's top-left cell
   const [r, c] = R.cells.reduce((a, b) => (b[0] < a[0] || (b[0] === a[0] && b[1] < a[1])) ? b : a);
@@ -309,7 +570,9 @@ function drawPath(g, p, id, regions, dist) {
 
 let hoverEdge = null, hoverCell = null, pathCell = null, hoverTimer = null;
 function render() {
-  const { id, regions, dist } = analyse();
+  const extra = previewWalls() || new Set();
+  const W = extra.size ? new Set([...walls, ...extra]) : walls;
+  const { id, regions, dist } = analyseBoard(N, W);
   svg.replaceChildren();
   const g = (cls) => { const e = el("g", cls ? {class: cls} : {}); svg.append(e); return e; };
   const fills = g(), lines = g(), text = g(), wl = g(), hv = g();
@@ -321,6 +584,9 @@ function render() {
       if (!R.symmetric) fills.append(el("rect", {x: c*S+4, y: r*S+4, width: S-8, height: S-8, fill: "none", stroke: "var(--bad)", "stroke-width": 2, "stroke-dasharray": "6 6", opacity: .5}));
     }
   }
+  const sts = currentStates();
+  if (sts) for (const st of sts) for (const i of st)
+    fills.append(el("rect", {x: (i % N)*S, y: (i / N | 0)*S, width: S, height: S, fill: "var(--path)", "fill-opacity": .18}));
   for (let i = 1; i < N; i++) {
     lines.append(el("line", {x1: i*S, y1: 0, x2: i*S, y2: N*S, stroke: "var(--grid)", "stroke-width": 2}));
     lines.append(el("line", {x1: 0, y1: i*S, x2: N*S, y2: i*S, stroke: "var(--grid)", "stroke-width": 2}));
@@ -334,21 +600,41 @@ function render() {
     if (clue != null) {
       total++;
       const good = d === clue; if (good) match++;
-      const col = walls.size === 0 ? "var(--ink)" : good ? "var(--ok)" : "var(--bad)";
+      const col = W.size === 0 ? "var(--ink)" : good ? "var(--ok)" : "var(--bad)";
       text.append(el("text", {x: cx, y: cy + 4, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "var(--sans)", "font-size": 46, "font-weight": 600, fill: col}, clue));
-      if (opts.cost && !good && walls.size) text.append(el("text", {x: c*S + S - 6, y: r*S + S - 8, "text-anchor": "end", "font-family": "var(--mono)", "font-size": 18, fill: "var(--bad)"}, d === Infinity ? "∞" : d));
+      if (opts.cost && !good && W.size) text.append(el("text", {x: c*S + S - 6, y: r*S + S - 8, "text-anchor": "end", "font-family": "var(--mono)", "font-size": 18, fill: "var(--bad)"}, d === Infinity ? "∞" : d));
     } else if (opts.cost) {
       text.append(el("text", {x: cx, y: cy + 2, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "var(--mono)", "font-size": 26, fill: "var(--muted)"}, d === Infinity ? "∞" : d));
     }
     if (opts.size) text.append(el("text", {x: c*S + 7, y: r*S + 22, "font-family": "var(--mono)", "font-size": 18, "font-weight": 700, fill: "var(--accent)"}, R.size));
+    const cf = cellCfg[r + "," + c];
+    if (cf && cf.mode !== "ignore") {
+      const solve = cf.mode === "solve";
+      text.append(el("rect", {x: c*S + 5, y: r*S + S - 29, width: 24, height: 24, rx: 5, fill: solve ? "var(--path)" : "var(--accent)"}));
+      text.append(el("text", {x: c*S + 17, y: r*S + S - 16, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "var(--mono)", "font-size": 17, "font-weight": 700, fill: "var(--paper)"}, solve ? "S" : "C"));
+    }
   }
-  for (const k of walls) {
+  for (const k of W) {
     const [t, r, c] = k.split(","); const R = +r, C = +c;
     const a = t === "h" ? {x1: C*S, y1: R*S, x2: C*S+S, y2: R*S} : {x1: C*S, y1: R*S, x2: C*S, y2: R*S+S};
     const dangling = id[t === "h" ? R-1 : R][t === "h" ? C : C-1] === id[R][C];
-    wl.append(el("line", {...a, stroke: dangling ? "var(--muted)" : "var(--wall)", "stroke-width": 9, "stroke-linecap": "round"}));
+    wl.append(el("line", {...a, stroke: extra.has(k) ? "var(--path)" : dangling ? "var(--muted)" : "var(--wall)", "stroke-width": 9, "stroke-linecap": "round"}));
   }
   wl.append(el("rect", {x: 0, y: 0, width: N*S, height: N*S, fill: "none", stroke: "var(--wall)", "stroke-width": 10}));
+  if (sts) { // orange outline around each found state, drawn just inside its border
+    const owner = new Map(); sts.forEach((st, k) => st.forEach(i => owner.set(i, k)));
+    const inset = 9;
+    for (const [i, k] of owner) {
+      const r = i / N | 0, c = i % N, x0 = c*S, y0 = r*S;
+      const same = (x, y) => x >= 0 && y >= 0 && x < N && y < N && owner.get(x * N + y) === k;
+      const sides = [
+        [-1, 0, x0, y0 + inset, x0 + S, y0 + inset], [1, 0, x0, y0 + S - inset, x0 + S, y0 + S - inset],
+        [0, -1, x0 + inset, y0, x0 + inset, y0 + S], [0, 1, x0 + S - inset, y0, x0 + S - inset, y0 + S]
+      ];
+      for (const [dr, dc, x1, y1, x2, y2] of sides)
+        if (!same(r + dr, c + dc)) wl.append(el("line", {x1, y1, x2, y2, stroke: "var(--path)", "stroke-width": 5}));
+    }
+  }
   if (hoverEdge) {
     const [t, r, c] = hoverEdge.split(","); const R = +r, C = +c;
     const a = t === "h" ? {x1: C*S+8, y1: R*S, x2: C*S+S-8, y2: R*S} : {x1: C*S, y1: R*S+8, x2: C*S, y2: R*S+S-8};
@@ -398,11 +684,14 @@ function edgeAt(ev) {
 function save() { try { localStorage.setItem(KEY, JSON.stringify([...walls])); } catch (e) {} }
 function snapshot() { undo.push([...walls]); if (undo.length > 500) undo.shift(); redo.length = 0; }
 
-let drag = null;
+let drag = null, pressCell = null;
 svg.addEventListener("pointerdown", ev => {
-  const e = edgeAt(ev); if (!e) return;
+  const e = edgeAt(ev);
+  if (!e) { pressCell = cellAt(ev); return; } // a press inside a cell opens its settings on release
+  pressCell = null;
   ev.preventDefault();
   clearHover();
+  clearFound();
   snapshot();
   drag = { add: !walls.has(e), changed: false };
   drag.add ? walls.add(e) : walls.delete(e);
@@ -426,7 +715,14 @@ svg.addEventListener("pointermove", ev => {
   }
 });
 const end = () => { if (drag) { drag = null; save(); render(); } };
-svg.addEventListener("pointerup", end);
+svg.addEventListener("pointerup", ev => {
+  if (!drag && pressCell) {
+    const cell = cellAt(ev);
+    if (cell && cell + "" === pressCell + "") { clearHover(); openCell(cell); }
+  }
+  pressCell = null;
+  end();
+});
 svg.addEventListener("pointercancel", end);
 svg.addEventListener("pointerleave", () => {
   if (drag) return;
@@ -434,7 +730,7 @@ svg.addEventListener("pointerleave", () => {
   if (had) render();
 });
 
-function restore(from, to) { if (!from.length) return; to.push([...walls]); walls = new Set(from.pop()); save(); render(); }
+function restore(from, to) { if (!from.length) return; clearFound(); to.push([...walls]); walls = new Set(from.pop()); save(); render(); }
 document.getElementById("bUndo").onclick = () => restore(undo, redo);
 document.getElementById("bRedo").onclick = () => restore(redo, undo);
 document.addEventListener("keydown", ev => {
@@ -444,7 +740,7 @@ document.addEventListener("keydown", ev => {
 const confirmRow = document.getElementById("confirmRow");
 document.getElementById("bClear").onclick = () => { if (walls.size) confirmRow.hidden = false; };
 document.getElementById("bNo").onclick = () => { confirmRow.hidden = true; };
-document.getElementById("bYes").onclick = () => { snapshot(); walls.clear(); save(); confirmRow.hidden = true; render(); };
+document.getElementById("bYes").onclick = () => { clearFound(); snapshot(); walls.clear(); save(); confirmRow.hidden = true; render(); };
 for (const [i, k] of [["tColor", "color"], ["tSize", "size"], ["tCost", "cost"], ["tPath", "path"]]) {
   const box = document.getElementById(i); box.checked = opts[k];
   box.onchange = () => { opts[k] = box.checked; if (k === "path") clearHover(); render(); };
@@ -528,9 +824,162 @@ capIn.addEventListener("change", () => { showLimit = 300; showShapes(); });
 document.getElementById("shapeMinus").onclick = () => { nIn.value = Math.max(1, +nIn.value - 1); showLimit = 300; showShapes(); };
 document.getElementById("shapePlus").onclick = () => { nIn.value = Math.min(MAXN, +nIn.value + 1); showLimit = 300; showShapes(); };
 
+// ---- Cell settings popup ----
+const pop = document.getElementById("cellPop"), sizeIn = document.getElementById("cellSize"), costIn = document.getElementById("cellCost");
+const sizeChips = document.getElementById("sizeChips"), useClue = document.getElementById("useClue");
+const MODE_HELP = {
+  ignore: "Find solve doesn't use this cell.",
+  solve: "Find solve must place a state that covers this cell. Its size and travel cost must be allowed below.",
+  constraint: "Find solve only keeps results where this cell's state size and travel cost are allowed below. The cell doesn't need to be covered."
+};
+let popKey = null;
+for (let i = 1; i <= SOLVE_LIMITS.hardMax; i++) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = i; b.setAttribute("aria-pressed", "false");
+  b.onclick = () => {
+    const v = getCfg(popKey), set = parseNums(v.size).set || new Set();
+    set.has(i) ? set.delete(i) : set.add(i);
+    setCfg(popKey, { ...v, size: formatNums(set) }); syncPop();
+  };
+  sizeChips.append(b);
+}
+function formatNums(set) {
+  const a = [...set].sort((x, y) => x - y), parts = [];
+  for (let i = 0; i < a.length;) {
+    let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++;
+    parts.push(i === j ? `${a[i]}` : j === i + 1 ? `${a[i]}, ${a[j]}` : `${a[i]}-${a[j]}`);
+    i = j + 1;
+  }
+  return parts.join(", ");
+}
+function getCfg(k) { return { mode: "ignore", size: "", cost: "", ...(cellCfg[k] || {}) }; }
+function setCfg(k, v) {
+  const old = JSON.stringify(getCfg(k));
+  if (v.mode === "ignore" && !v.size.trim() && !v.cost.trim()) delete cellCfg[k]; else cellCfg[k] = v;
+  if (JSON.stringify(getCfg(k)) === old) return;
+  saveCells(); clearFound(); render();
+}
+function syncPop() {
+  const v = getCfg(popKey), [r, c] = popKey.split(",").map(Number), clue = CLUES[popKey];
+  for (const rb of document.querySelectorAll('input[name="cellMode"]')) rb.checked = rb.value === v.mode;
+  if (document.activeElement !== sizeIn) sizeIn.value = v.size;
+  if (document.activeElement !== costIn) costIn.value = v.cost;
+  const ps = parseNums(v.size), pc = parseNums(v.cost);
+  for (const b of sizeChips.children) b.setAttribute("aria-pressed", !!(ps.set && ps.set.has(+b.textContent)));
+  document.getElementById("sizeErr").textContent = ps.bad.length ? `Ignored: ${ps.bad.join(" ")}. Use numbers and ranges like 5, 7-9.` : "";
+  document.getElementById("costErr").textContent = pc.bad.length ? `Ignored: ${pc.bad.join(" ")}. Use numbers and ranges like 10-14.` : "";
+  let help = MODE_HELP[v.mode];
+  if (v.mode === "ignore" && (ps.set || pc.set)) help += " The limits below are kept but not used.";
+  document.getElementById("modeHelp").textContent = help;
+  document.getElementById("cellTitle").textContent = `Row ${r + 1}, column ${c + 1}` + (clue != null ? ` · clue ${clue}` : "");
+  useClue.hidden = clue == null;
+  useClue.textContent = `Use clue (${clue})`;
+}
+function openCell([r, c]) {
+  popKey = r + "," + c;
+  syncPop();
+  pop.hidden = false;
+  (document.querySelector('input[name="cellMode"]:checked') || document.getElementById("mIgnore")).focus();
+}
+for (const rb of document.querySelectorAll('input[name="cellMode"]'))
+  rb.addEventListener("change", () => { setCfg(popKey, { ...getCfg(popKey), mode: rb.value }); syncPop(); });
+sizeIn.addEventListener("input", () => { setCfg(popKey, { ...getCfg(popKey), size: sizeIn.value }); syncPop(); });
+costIn.addEventListener("input", () => { setCfg(popKey, { ...getCfg(popKey), cost: costIn.value }); syncPop(); });
+useClue.onclick = () => { setCfg(popKey, { ...getCfg(popKey), cost: String(CLUES[popKey]) }); costIn.value = String(CLUES[popKey]); syncPop(); };
+document.getElementById("cellReset").onclick = () => { setCfg(popKey, { mode: "ignore", size: "", cost: "" }); sizeIn.value = costIn.value = ""; syncPop(); };
+document.getElementById("cellClose").onclick = () => { pop.hidden = true; };
+pop.addEventListener("click", ev => { if (ev.target === pop) pop.hidden = true; });
+
+// ---- Find solve: runs the search in a background worker ----
+const bFind = document.getElementById("bFind"), bStop = document.getElementById("bStop");
+const findStatus = document.getElementById("findStatus"), findNav = document.getElementById("findNav");
+const IDLE_MSG = "Click a cell to mark it Solve or Constraint, then press Find solve.";
+let worker = null, workerUrl = null;
+const fmt = n => n.toLocaleString("en-US");
+function status(t) { findStatus.textContent = t; }
+function clearFound() {
+  if (!found) return;
+  found = null; findNav.hidden = true; status(IDLE_MSG);
+}
+function cancelSearch() {
+  if (worker) { worker.terminate(); worker = null; }
+  if (workerUrl) { URL.revokeObjectURL(workerUrl); workerUrl = null; }
+  bFind.hidden = false; bStop.hidden = true;
+}
+function cellList() {
+  const out = [];
+  for (const k in cellCfg) {
+    const v = getCfg(k); if (v.mode === "ignore") continue;
+    const [r, c] = k.split(",").map(Number); if (r >= N || c >= N) continue;
+    const s = parseNums(v.size).set, t = parseNums(v.cost).set;
+    out.push({ r, c, mode: v.mode, size: s ? [...s] : null, cost: t ? [...t] : null });
+  }
+  return out;
+}
+function showFound() {
+  findNav.hidden = !found;
+  if (found) document.getElementById("findCount").textContent = `${fmt(found.idx + 1)} / ${fmt(found.solutions.length)}`;
+  render();
+}
+function showResult(r) {
+  const L = SOLVE_LIMITS, sols = r.solutions, parts = [];
+  if (r.stopped === "shapes") parts.push(`There are too many possible states to list (over ${fmt(L.perCell)} for one cell). Allow fewer sizes or draw more walls, then try again.`);
+  else if (!sols.length) parts.push(r.stopped === "evals" ? `Nothing fits in the first ${fmt(L.evals)} combinations checked. Narrow the limits and try again.` : "No arrangement fits these cells and limits.");
+  else parts.push(`${fmt(sols.length)} arrangement${sols.length === 1 ? "" : "s"} fit` +
+    (r.stopped === "results" ? `. The search stopped at ${fmt(L.results)}, so there may be more.` :
+     r.stopped === "evals" ? `. The search stopped after checking ${fmt(L.evals)} combinations, so there may be more.` : "."));
+  if (r.candidates.length) parts.push("Possible states per Solve cell: " + r.candidates.map(x => `row ${x.r + 1} col ${x.c + 1}: ${fmt(x.count)}`).join("; ") + ".");
+  parts.push(...r.notes);
+  found = sols.length ? { solutions: sols, idx: 0 } : null;
+  status(parts.join(" "));
+  showFound();
+}
+function startFind() {
+  cancelSearch(); clearFound();
+  const cells = cellList();
+  if (!cells.some(x => x.mode === "solve")) { status("Mark at least one cell as Solve first. Click a cell to set it."); return; }
+  const job = { N, walls: [...walls], cells }, lvl = level;
+  bFind.hidden = true; bStop.hidden = false; status("Searching…");
+  const done = r => { cancelSearch(); if (lvl === level) showResult(r); };
+  const runHere = () => { status("Searching… the page may pause."); setTimeout(() => done(findSolves(job.N, job.walls, job.cells)), 30); };
+  try {
+    const src = document.getElementById("core").textContent +
+      "\nonmessage = e => { const d = e.data; postMessage({ done: findSolves(d.N, d.walls, d.cells, p => postMessage({ progress: p })) }); };";
+    workerUrl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    worker = new Worker(workerUrl);
+    worker.onmessage = e => {
+      const d = e.data;
+      if (d.done) return done(d.done);
+      const p = d.progress;
+      status(p.phase === "shapes" ? `Searching… ${fmt(p.nodes)} shapes tried.` : `Checking combinations… ${fmt(p.evals)} checked, ${fmt(p.found)} fit so far.`);
+    };
+    worker.onerror = e => { e.preventDefault(); cancelSearch(); bFind.hidden = true; bStop.hidden = false; runHere(); };
+    worker.postMessage(job);
+  } catch (e) { cancelSearch(); bFind.hidden = true; bStop.hidden = false; runHere(); }
+}
+function step(d) { if (!found) return; const n = found.solutions.length; found.idx = (found.idx + d + n) % n; showFound(); }
+bFind.onclick = startFind;
+bStop.onclick = () => { cancelSearch(); status("Search stopped."); };
+document.getElementById("bPrev").onclick = () => step(-1);
+document.getElementById("bNext").onclick = () => step(1);
+document.getElementById("bKeep").onclick = () => {
+  const w = viewWalls(); clearFound(); snapshot(); walls = new Set(w); save(); render();
+  status("Walls added to the board. Undo removes them.");
+};
+document.getElementById("bClearFound").onclick = () => { clearFound(); render(); };
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Escape") { pop.hidden = true; return; }
+  if (!found || !pop.hidden || !modal.hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName)) return;
+  if (ev.key === "ArrowLeft") { ev.preventDefault(); step(-1); }
+  if (ev.key === "ArrowRight") { ev.preventDefault(); step(1); }
+});
+status(IDLE_MSG);
+
 for (const b of document.querySelectorAll("[data-level]")) b.onclick = () => {
   if (b.dataset.level === level) return;
+  cancelSearch(); pop.hidden = true;
   loadLevel(b.dataset.level);
+  findNav.hidden = true; status(IDLE_MSG);
   for (const k in shapeCache) delete shapeCache[k]; // shapes must fit the new board
   confirmRow.hidden = true;
   render();
