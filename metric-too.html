@@ -217,6 +217,7 @@ button.primary { background: var(--path); border-color: var(--path); color: var(
         <input id="cellCost" type="text" autocomplete="off" placeholder="Any cost (e.g. 11 or 10-14)">
         <button id="useClue" type="button" hidden>Use clue</button>
       </div>
+      <div class="chips" id="costChips" aria-label="Toggle travel costs"></div>
       <div class="err" id="costErr"></div>
     </div>
     <div class="btns"><button id="cellReset" type="button">Reset this cell</button></div>
@@ -430,8 +431,8 @@ function findSolves(N, wallList, cellList, progress) {
       sizeOf = i => sizes[id[i]];
     } else sizeOf = i => A.regions[A.id[i / N | 0][i % N]].size;
     for (const [i, v] of checks) {
-      if (owner[i] < 0) continue; // only cells covered by a found state are checked
-      if (v.size && !v.size.has(sizeOf(i))) return;
+      // Size only matters for cells a found state covers; travel cost is always checked.
+      if (owner[i] >= 0 && v.size && !v.size.has(sizeOf(i))) return;
       if (v.cost && !v.cost.has(A.dist[i / N | 0][i % N])) return;
     }
     out.solutions.push(chosen.map(s => s.slice()));
@@ -820,19 +821,25 @@ const sizeChips = document.getElementById("sizeChips"), useClue = document.getEl
 const MODE_HELP = {
   ignore: "Find solve doesn't use this cell.",
   solve: "Find solve must place a state that covers this cell. Its size and travel cost must be allowed below.",
-  constraint: "When a found state covers this cell, Find solve only keeps it if this cell's state size and travel cost are allowed below. Results that don't cover this cell ignore it."
+  constraint: "Find solve only keeps results where this cell's travel cost is allowed below. The size limit is only checked when a found state covers this cell."
 };
+const costChips = document.getElementById("costChips");
 let popKey = null;
-for (let i = 1; i <= SOLVE_LIMITS.hardMax; i++) {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = i; b.setAttribute("aria-pressed", "false");
-  b.onclick = () => {
-    const v = getCfg(popKey), set = parseNums(v.size).set || new Set();
-    set.has(i) ? set.delete(i) : set.add(i);
-    setCfg(popKey, { ...v, size: formatNums(set) }); syncPop();
-  };
-  sizeChips.append(b);
+// Toggle buttons for numbers from..to that edit the given field ("size" or "cost").
+function makeChips(box, from, to, field) {
+  for (let i = from; i <= to; i++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = i; b.setAttribute("aria-pressed", "false");
+    b.onclick = () => {
+      const v = getCfg(popKey), set = parseNums(v[field]).set || new Set();
+      set.has(i) ? set.delete(i) : set.add(i);
+      setCfg(popKey, { ...v, [field]: formatNums(set) }); syncPop();
+    };
+    box.append(b);
+  }
 }
+makeChips(sizeChips, 1, SOLVE_LIMITS.hardMax, "size");
+makeChips(costChips, 0, 40, "cost");
 function formatNums(set) {
   const a = [...set].sort((x, y) => x - y), parts = [];
   for (let i = 0; i < a.length;) {
@@ -856,6 +863,7 @@ function syncPop() {
   if (document.activeElement !== costIn) costIn.value = v.cost;
   const ps = parseNums(v.size), pc = parseNums(v.cost);
   for (const b of sizeChips.children) b.setAttribute("aria-pressed", !!(ps.set && ps.set.has(+b.textContent)));
+  for (const b of costChips.children) b.setAttribute("aria-pressed", !!(pc.set && pc.set.has(+b.textContent)));
   document.getElementById("sizeErr").textContent = ps.bad.length ? `Ignored: ${ps.bad.join(" ")}. Use numbers and ranges like 5, 7-9.` : "";
   document.getElementById("costErr").textContent = pc.bad.length ? `Ignored: ${pc.bad.join(" ")}. Use numbers and ranges like 10-14.` : "";
   let help = MODE_HELP[v.mode];
